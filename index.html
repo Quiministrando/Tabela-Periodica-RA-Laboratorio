@@ -1,0 +1,1059 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+</head>
+
+<body style="margin:0; overflow:hidden; background:#000;">
+
+  <div id="toast"
+       style="
+         display:none;
+         position:fixed;
+         top:14px;
+         left:50%;
+         transform:translateX(-50%);
+         z-index:40;
+         max-width:82vw;
+         background:rgba(0,0,0,.84);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:10px;
+         padding:8px 12px;
+         font:700 14px Arial,sans-serif;
+         text-align:center;
+         box-shadow:0 3px 10px rgba(0,0,0,.35);">
+  </div>
+
+  <div id="painel-info"
+       style="
+         display:none;
+         position:fixed;
+         left:50%;
+         top:50%;
+         transform:translate(-50%,-50%);
+         z-index:60;
+         width:min(330px,calc(100vw - 34px));
+         box-sizing:border-box;
+         background:rgba(0,0,0,.93);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:14px;
+         padding:16px;
+         font-family:Arial,sans-serif;
+         box-shadow:0 6px 22px rgba(0,0,0,.55);">
+
+      <button id="btn-fechar-info"
+              style="
+                position:absolute;
+                right:9px;
+                top:7px;
+                border:0;
+                background:transparent;
+                color:#fff;
+                font:700 25px Arial,sans-serif;">
+        ×
+      </button>
+
+      <div id="info-tipo"
+           style="font-size:12px;font-weight:700;opacity:.72;">
+        ISÓTOPO ATUAL
+      </div>
+
+      <div id="info-nome"
+           style="font-size:23px;font-weight:700;margin-top:3px;">
+        Sódio-23
+      </div>
+
+      <div id="info-simbolo"
+           style="font-size:30px;font-weight:700;margin:2px 0 10px 0;">
+        ²³Na
+      </div>
+
+      <div id="info-corpo"
+           style="font-size:15px;line-height:1.55;">
+      </div>
+
+      <div id="info-observacao"
+           style="font-size:13px;line-height:1.4;opacity:.8;margin-top:10px;">
+      </div>
+  </div>
+
+  <div id="barra-controles"
+       style="
+         display:none;
+         position:fixed;
+         left:50%;
+         bottom:18px;
+         transform:translateX(-50%);
+         z-index:35;
+         align-items:center;
+         gap:6px;
+         white-space:nowrap;">
+
+      <button id="btn-menos"
+              style="
+                min-width:48px;
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 10px;
+                font:700 17px Arial,sans-serif;">
+        −n
+      </button>
+
+      <button id="btn-info"
+              style="
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 11px;
+                font:700 13px Arial,sans-serif;">
+        ℹ Isótopo
+      </button>
+
+      <button id="btn-mais"
+              style="
+                min-width:48px;
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 10px;
+                font:700 17px Arial,sans-serif;">
+        +n
+      </button>
+
+      <button id="btn-modo-quimico"
+              style="
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 11px;
+                font:700 13px Arial,sans-serif;">
+        ⚡ Íons
+      </button>
+
+      <button id="btn-modo-camadas"
+              style="
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 11px;
+                font:700 13px Arial,sans-serif;">
+        ▣ Plano
+      </button>
+  </div>
+
+  <button id="btn-comparar"
+          style="
+            display:none;
+            position:fixed;
+            top:16px;
+            right:12px;
+            z-index:35;
+            background:rgba(0,0,0,.86);
+            color:#fff;
+            border:2px solid #fff;
+            border-radius:12px;
+            padding:10px 12px;
+            font:700 13px Arial,sans-serif;">
+    ⇄ Comparar
+  </button>
+
+  <button id="btn-sair-comparacao"
+          style="
+            display:none;
+            position:fixed;
+            left:50%;
+            bottom:18px;
+            transform:translateX(-50%);
+            z-index:45;
+            background:rgba(0,0,0,.90);
+            color:#fff;
+            border:2px solid #fff;
+            border-radius:12px;
+            padding:11px 14px;
+            font:700 14px Arial,sans-serif;">
+    × Sair da comparação
+  </button>
+
+  <script src="elementos.js"></script>
+
+  <script>
+    var TOAST_TIMER = null;
+
+    function mostrarToast(texto, duracao) {
+      var toast = document.querySelector("#toast");
+      toast.textContent = texto;
+      toast.style.display = "block";
+
+      if (TOAST_TIMER) clearTimeout(TOAST_TIMER);
+
+      TOAST_TIMER = setTimeout(function () {
+        toast.style.display = "none";
+      }, duracao || 1500);
+    }
+
+    function formatarCarga(carga) {
+      if (carga === 0) return "0";
+      return (carga > 0 ? "+" : "−") + Math.abs(carga);
+    }
+
+    function elementoPorId(id) {
+      for (var i = 0; i < window.ELEMENTOS.length; i++) {
+        if (window.ELEMENTOS[i].id === id) {
+          return window.ELEMENTOS[i];
+        }
+      }
+      return null;
+    }
+
+    AFRAME.registerComponent("anel-suave", {
+      schema: {
+        raio: {type: "number", default: 1},
+        tubo: {type: "number", default: 0.008}
+      },
+
+      init: function () {
+        var geometria = new THREE.TorusGeometry(
+          this.data.raio,
+          this.data.tubo,
+          24,
+          192
+        );
+
+        var material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.62,
+          roughness: 0.32,
+          metalness: 0.04
+        });
+
+        this.el.setObject3D(
+          "mesh",
+          new THREE.Mesh(geometria, material)
+        );
+      },
+
+      remove: function () {
+        var mesh = this.el.getObject3D("mesh");
+
+        if (mesh) {
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) mesh.material.dispose();
+        }
+
+        this.el.removeObject3D("mesh");
+      }
+    });
+
+    AFRAME.registerComponent("rotacao-camada", {
+      schema: {
+        velocidade: {type: "number", default: 30},
+        ativo: {type: "boolean", default: true}
+      },
+
+      tick: function (time, delta) {
+        if (!this.data.ativo || !delta) return;
+
+        this.el.object3D.rotation.z += THREE.Math.degToRad(
+          this.data.velocidade * (delta / 1000)
+        );
+      }
+    });
+
+    AFRAME.registerComponent("laboratorio-atomico", {
+      init: function () {
+        this.dados = elementoPorId("na");
+        this.atom = this.el;
+
+        this.isotopoIndex = 1;           // Na-23
+        this.estadoEletronicoIndex = 1;  // Na neutro
+        this.modoQuimico = "isotopo";
+        this.modoPlano = false;
+
+        this.nucleo = null;
+        this.grupoCamadas = null;
+
+        this.comparacaoAtiva = false;
+        this.aguardandoSegundo = false;
+        this.segundoAtomo = null;
+        this.labelSegundo = null;
+
+        window.CAMADAS_V2 = [];
+        window.LAB_V2 = this;
+
+        this.criarNucleo();
+        this.criarCamadas();
+        this.configurarControles();
+        this.atualizarBotoes();
+      },
+
+      esfera: function (parent, radius, color, x, y, z) {
+        var e = document.createElement("a-sphere");
+
+        e.setAttribute("radius", radius);
+        e.setAttribute("color", color);
+        e.setAttribute("position", x + " " + y + " " + z);
+        e.setAttribute("segments-width", "20");
+        e.setAttribute("segments-height", "16");
+
+        parent.appendChild(e);
+
+        return e;
+      },
+
+      criarNucleoGenerico: function (dados, neutrons, parent) {
+        var nucleo = document.createElement("a-entity");
+        parent.appendChild(nucleo);
+
+        var protons = dados.protons;
+        var total = protons + neutrons;
+
+        var raioCluster = 0.205;
+        var raioNucleon = 0.078;
+        var golden = Math.PI * (3 - Math.sqrt(5));
+
+        var nucleons = [];
+        var pRest = protons;
+        var nRest = neutrons;
+
+        while (pRest > 0 || nRest > 0) {
+          if (pRest > 0) {
+            nucleons.push("proton");
+            pRest--;
+          }
+
+          if (nRest > 0) {
+            nucleons.push("neutron");
+            nRest--;
+          }
+        }
+
+        for (var i = 0; i < total; i++) {
+          var y = 1 - (i / Math.max(1, total - 1)) * 2;
+          var r = Math.sqrt(Math.max(0, 1 - y*y));
+          var theta = golden * i;
+
+          var camadaInterna = [0.68, 0.82, 0.96][i % 3];
+          var espalhamento = raioCluster * camadaInterna;
+
+          var x = Math.cos(theta) * r * espalhamento;
+          var yy = y * espalhamento;
+          var z = Math.sin(theta) * r * espalhamento;
+
+          var tipo = nucleons[i];
+          var cor = (tipo === "proton")
+            ? "#55aaff"
+            : "#ffe066";
+
+          this.esfera(
+            nucleo,
+            raioNucleon,
+            cor,
+            x,
+            yy,
+            z
+          );
+        }
+
+        return nucleo;
+      },
+
+      criarCamadasGenericas: function (dados, quantidades, parent, registrar) {
+        var self = this;
+
+        var raios = [0.48, 0.76, 1.05, 1.32, 1.58, 1.82, 2.04];
+        var inclinacoes = [
+          {x:15, y:0,  z:8},
+          {x:68, y:10, z:28},
+          {x:38, y:58, z:-18},
+          {x:72, y:42, z:11},
+          {x:28, y:72, z:32},
+          {x:58, y:24, z:-32},
+          {x:81, y:15, z:45}
+        ];
+        var velocidades = [55, -39, 29, -23, 19, -16, 13];
+
+        quantidades.forEach(function(qtd, camadaIndex) {
+          var tilt = document.createElement("a-entity");
+          parent.appendChild(tilt);
+
+          var rotor = document.createElement("a-entity");
+
+          rotor.setAttribute(
+            "rotacao-camada",
+            "velocidade: " +
+            velocidades[camadaIndex] +
+            "; ativo: " +
+            (!self.modoPlano)
+          );
+
+          tilt.appendChild(rotor);
+
+          var ring = document.createElement("a-entity");
+
+          ring.setAttribute(
+            "anel-suave",
+            "raio: " +
+            raios[camadaIndex] +
+            "; tubo: 0.008"
+          );
+
+          rotor.appendChild(ring);
+
+          for (var j = 0; j < qtd; j++) {
+            var a =
+              (Math.PI * 2 * j / qtd) +
+              camadaIndex * 0.37;
+
+            var ex =
+              Math.cos(a) *
+              raios[camadaIndex];
+
+            var ey =
+              Math.sin(a) *
+              raios[camadaIndex];
+
+            var eletron = self.esfera(
+              rotor,
+              0.058,
+              "#ff5a5a",
+              ex,
+              ey,
+              0
+            );
+
+            eletron.setAttribute(
+              "material",
+              "color: #ff5a5a; " +
+              "emissive: #7c1717; " +
+              "emissiveIntensity: 0.24; " +
+              "roughness: 0.25"
+            );
+          }
+
+          var registro = {
+            tilt: tilt,
+            rotor: rotor,
+            inclinacao: inclinacoes[camadaIndex],
+            velocidade: velocidades[camadaIndex]
+          };
+
+          if (registrar) {
+            window.CAMADAS_V2.push(registro);
+          } else {
+            window.CAMADAS_V2.push(registro);
+          }
+        });
+      },
+
+      criarNucleo: function () {
+        if (this.nucleo && this.nucleo.parentNode) {
+          this.nucleo.parentNode.removeChild(this.nucleo);
+        }
+
+        var isotopo =
+          this.dados.isotopos[this.isotopoIndex];
+
+        this.nucleo = this.criarNucleoGenerico(
+          this.dados,
+          isotopo.neutrons,
+          this.atom
+        );
+      },
+
+      criarCamadas: function () {
+        if (
+          this.grupoCamadas &&
+          this.grupoCamadas.parentNode
+        ) {
+          this.grupoCamadas.parentNode
+            .removeChild(this.grupoCamadas);
+        }
+
+        this.grupoCamadas =
+          document.createElement("a-entity");
+
+        this.atom.appendChild(this.grupoCamadas);
+
+        window.CAMADAS_V2 = [];
+
+        var estado =
+          this.dados.estadosEletronicos[
+            this.estadoEletronicoIndex
+          ];
+
+        this.criarCamadasGenericas(
+          this.dados,
+          estado.camadas,
+          this.grupoCamadas,
+          true
+        );
+
+        this.aplicarVisualizacaoAtual();
+      },
+
+      aplicarVisualizacaoAtual: function () {
+        var self = this;
+
+        window.CAMADAS_V2.forEach(function(camada) {
+          if (self.modoPlano) {
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " +
+              camada.velocidade +
+              "; ativo: false"
+            );
+
+            camada.rotor.object3D.rotation.set(0,0,0);
+            camada.tilt.object3D.rotation.set(0,0,0);
+          } else {
+            var inc = camada.inclinacao;
+
+            camada.tilt.object3D.rotation.set(
+              THREE.Math.degToRad(inc.x),
+              THREE.Math.degToRad(inc.y),
+              THREE.Math.degToRad(inc.z)
+            );
+
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " +
+              camada.velocidade +
+              "; ativo: true"
+            );
+          }
+        });
+
+        document.querySelector("#btn-modo-camadas")
+          .textContent = this.modoPlano
+            ? "◉ 3D"
+            : "▣ Plano";
+      },
+
+      atualizarBotoes: function () {
+        var btnMenos =
+          document.querySelector("#btn-menos");
+
+        var btnMais =
+          document.querySelector("#btn-mais");
+
+        var btnInfo =
+          document.querySelector("#btn-info");
+
+        var btnModo =
+          document.querySelector("#btn-modo-quimico");
+
+        if (this.modoQuimico === "isotopo") {
+          btnMenos.textContent = "−n";
+          btnMais.textContent = "+n";
+          btnInfo.textContent = "ℹ Isótopo";
+          btnModo.textContent = "⚡ Íons";
+
+          btnMenos.disabled =
+            (this.isotopoIndex === 0);
+
+          btnMais.disabled =
+            (this.isotopoIndex ===
+             this.dados.isotopos.length - 1);
+        } else {
+          btnMenos.textContent = "−e";
+          btnMais.textContent = "+e";
+          btnInfo.textContent = "ℹ Íon";
+          btnModo.textContent = "⚛ Isótopos";
+
+          btnMenos.disabled =
+            (this.estadoEletronicoIndex === 0);
+
+          btnMais.disabled =
+            (this.estadoEletronicoIndex ===
+             this.dados.estadosEletronicos.length - 1);
+        }
+
+        btnMenos.style.opacity =
+          btnMenos.disabled ? "0.35" : "1";
+
+        btnMais.style.opacity =
+          btnMais.disabled ? "0.35" : "1";
+      },
+
+      mudarIsotopo: function (passo) {
+        var novo = this.isotopoIndex + passo;
+
+        if (
+          novo < 0 ||
+          novo >= this.dados.isotopos.length
+        ) return;
+
+        this.isotopoIndex = novo;
+
+        this.criarNucleo();
+        this.atualizarBotoes();
+
+        var iso =
+          this.dados.isotopos[this.isotopoIndex];
+
+        mostrarToast(
+          iso.nome + " • " + iso.estabilidade,
+          1450
+        );
+      },
+
+      mudarEletrons: function (passo) {
+        var novo =
+          this.estadoEletronicoIndex + passo;
+
+        if (
+          novo < 0 ||
+          novo >= this.dados.estadosEletronicos.length
+        ) return;
+
+        this.estadoEletronicoIndex = novo;
+
+        this.criarCamadas();
+        this.atualizarBotoes();
+
+        var estado =
+          this.dados.estadosEletronicos[
+            this.estadoEletronicoIndex
+          ];
+
+        mostrarToast(
+          estado.simbolo +
+          " • " +
+          estado.classificacao,
+          1450
+        );
+      },
+
+      abrirInfo: function () {
+        var painel =
+          document.querySelector("#painel-info");
+
+        var tipo =
+          document.querySelector("#info-tipo");
+
+        var nome =
+          document.querySelector("#info-nome");
+
+        var simbolo =
+          document.querySelector("#info-simbolo");
+
+        var corpo =
+          document.querySelector("#info-corpo");
+
+        var obs =
+          document.querySelector("#info-observacao");
+
+        if (this.modoQuimico === "isotopo") {
+          var iso =
+            this.dados.isotopos[this.isotopoIndex];
+
+          tipo.textContent = "ISÓTOPO ATUAL";
+          nome.textContent = iso.nome;
+          simbolo.textContent = iso.simboloNuclear;
+
+          corpo.innerHTML =
+            "Prótons: <strong>" +
+            this.dados.protons +
+            "</strong><br>" +
+            "Nêutrons: <strong>" +
+            iso.neutrons +
+            "</strong><br>" +
+            "Número de massa: <strong>" +
+            iso.massa +
+            "</strong><br>" +
+            "Estado: <strong>" +
+            iso.estabilidade +
+            "</strong><br>" +
+            "Meia-vida: <strong>" +
+            iso.meiaVida +
+            "</strong>";
+
+          obs.textContent =
+            iso.observacao || "";
+        } else {
+          var estado =
+            this.dados.estadosEletronicos[
+              this.estadoEletronicoIndex
+            ];
+
+          var cargaCalculada =
+            this.dados.protons -
+            estado.eletrons;
+
+          tipo.textContent = "ESTADO ELETRÔNICO";
+          nome.textContent = estado.nome;
+          simbolo.textContent = estado.simbolo;
+
+          corpo.innerHTML =
+            "Prótons: <strong>" +
+            this.dados.protons +
+            "</strong><br>" +
+            "Elétrons: <strong>" +
+            estado.eletrons +
+            "</strong><br>" +
+            "Carga: <strong>" +
+            formatarCarga(cargaCalculada) +
+            "</strong><br>" +
+            "Classificação: <strong>" +
+            estado.classificacao +
+            "</strong><br>" +
+            "Distribuição: <strong>" +
+            estado.distribuicao +
+            "</strong>";
+
+          obs.textContent =
+            estado.observacao || "";
+        }
+
+        painel.style.display = "block";
+      },
+
+      iniciarComparacao: function () {
+        if (this.comparacaoAtiva || this.aguardandoSegundo) {
+          return;
+        }
+
+        this.aguardandoSegundo = true;
+
+        // Fecha painéis e esconde controles químicos.
+        document.querySelector("#painel-info").style.display = "none";
+        document.querySelector("#barra-controles").style.display = "none";
+        document.querySelector("#btn-comparar").style.display = "none";
+        document.querySelector("#btn-sair-comparacao").style.display = "block";
+
+        // "Fixa" o sódio à esquerda na visualização da câmera.
+        this.atom.setAttribute("position", "-0.78 0 0");
+        this.atom.setAttribute("scale", "0.62 0.62 0.62");
+
+        var labelNa = document.querySelector("#label-na");
+        labelNa.setAttribute("visible", true);
+        labelNa.setAttribute("position", "-0.78 0.92 0");
+
+        document.querySelector("#titulo-central")
+          .setAttribute("visible", false);
+
+        mostrarToast(
+          "Sódio fixado para comparação • agora leia o barcode 17 do Cloro",
+          2600
+        );
+      },
+
+      receberSegundoElemento: function (id) {
+        if (!this.aguardandoSegundo || id === "na") {
+          return;
+        }
+
+        var dados = elementoPorId(id);
+
+        if (!dados) return;
+
+        this.aguardandoSegundo = false;
+        this.comparacaoAtiva = true;
+
+        var viewer =
+          document.querySelector("#viewer");
+
+        if (this.segundoAtomo &&
+            this.segundoAtomo.parentNode) {
+          this.segundoAtomo.parentNode
+            .removeChild(this.segundoAtomo);
+        }
+
+        var segundo =
+          document.createElement("a-entity");
+
+        segundo.setAttribute(
+          "position",
+          "0.78 0 0"
+        );
+
+        segundo.setAttribute(
+          "scale",
+          "0.62 0.62 0.62"
+        );
+
+        viewer.appendChild(segundo);
+        this.segundoAtomo = segundo;
+
+        this.criarNucleoGenerico(
+          dados,
+          dados.neutrons,
+          segundo
+        );
+
+        this.criarCamadasGenericas(
+          dados,
+          dados.camadas,
+          segundo,
+          false
+        );
+
+        this.aplicarVisualizacaoAtual();
+
+        var labelCl =
+          document.querySelector("#label-cl");
+
+        labelCl.setAttribute("visible", true);
+        labelCl.setAttribute("position", "0.78 0.92 0");
+
+        mostrarToast(
+          "Comparação ativa: Sódio × Cloro",
+          1700
+        );
+      },
+
+      sairComparacao: function () {
+        this.aguardandoSegundo = false;
+        this.comparacaoAtiva = false;
+
+        if (
+          this.segundoAtomo &&
+          this.segundoAtomo.parentNode
+        ) {
+          this.segundoAtomo.parentNode
+            .removeChild(this.segundoAtomo);
+        }
+
+        this.segundoAtomo = null;
+
+        this.atom.setAttribute(
+          "position",
+          "0 0 0"
+        );
+
+        this.atom.setAttribute(
+          "scale",
+          "1 1 1"
+        );
+
+        document.querySelector("#label-na")
+          .setAttribute("visible", false);
+
+        document.querySelector("#label-cl")
+          .setAttribute("visible", false);
+
+        document.querySelector("#titulo-central")
+          .setAttribute("visible", true);
+
+        document.querySelector("#btn-sair-comparacao")
+          .style.display = "none";
+
+        document.querySelector("#barra-controles")
+          .style.display = "flex";
+
+        document.querySelector("#btn-comparar")
+          .style.display = "block";
+
+        // Recria as camadas do Na para limpar registros do segundo átomo.
+        this.criarCamadas();
+
+        mostrarToast(
+          "Modo normal",
+          1000
+        );
+      },
+
+      configurarControles: function () {
+        var self = this;
+
+        document.querySelector("#btn-menos")
+          .addEventListener("click", function () {
+            if (self.modoQuimico === "isotopo") {
+              self.mudarIsotopo(-1);
+            } else {
+              self.mudarEletrons(-1);
+            }
+          });
+
+        document.querySelector("#btn-mais")
+          .addEventListener("click", function () {
+            if (self.modoQuimico === "isotopo") {
+              self.mudarIsotopo(1);
+            } else {
+              self.mudarEletrons(1);
+            }
+          });
+
+        document.querySelector("#btn-info")
+          .addEventListener("click", function () {
+            self.abrirInfo();
+          });
+
+        document.querySelector("#btn-fechar-info")
+          .addEventListener("click", function () {
+            document.querySelector("#painel-info")
+              .style.display = "none";
+          });
+
+        document.querySelector("#btn-modo-quimico")
+          .addEventListener("click", function () {
+            self.modoQuimico =
+              (self.modoQuimico === "isotopo")
+                ? "ion"
+                : "isotopo";
+
+            self.atualizarBotoes();
+
+            mostrarToast(
+              self.modoQuimico === "isotopo"
+                ? "Modo isótopos"
+                : "Modo íons",
+              1100
+            );
+          });
+
+        document.querySelector("#btn-modo-camadas")
+          .addEventListener("click", function () {
+            self.modoPlano = !self.modoPlano;
+
+            self.aplicarVisualizacaoAtual();
+
+            mostrarToast(
+              self.modoPlano
+                ? "Camadas planas"
+                : "Modo 3D",
+              1000
+            );
+          });
+
+        document.querySelector("#btn-comparar")
+          .addEventListener("click", function () {
+            self.iniciarComparacao();
+          });
+
+        document.querySelector("#btn-sair-comparacao")
+          .addEventListener("click", function () {
+            self.sairComparacao();
+          });
+      }
+    });
+
+    AFRAME.registerComponent("marcador-elemento", {
+      schema: {
+        id: {type: "string"}
+      },
+
+      init: function () {
+        var self = this;
+
+        this.el.addEventListener(
+          "markerFound",
+          function () {
+            var lab = window.LAB_V2;
+
+            if (!lab) return;
+
+            if (self.data.id === "na") {
+              document.querySelector("#viewer")
+                .setAttribute("visible", true);
+
+              if (
+                !lab.comparacaoAtiva &&
+                !lab.aguardandoSegundo
+              ) {
+                document.querySelector("#barra-controles")
+                  .style.display = "flex";
+
+                document.querySelector("#btn-comparar")
+                  .style.display = "block";
+
+                mostrarToast(
+                  "Sódio identificado",
+                  1200
+                );
+              }
+            } else {
+              lab.receberSegundoElemento(
+                self.data.id
+              );
+            }
+          }
+        );
+      }
+    });
+  </script>
+
+  <a-scene
+    vr-mode-ui="enabled:false;"
+    loading-screen="enabled:false;"
+    renderer="logarithmicDepthBuffer:true;"
+    arjs="trackingMethod:best; sourceType:webcam; detectionMode:mono_and_matrix; matrixCodeType:4x4_BCH_13_9_3; debugUIEnabled:false;"
+    embedded>
+
+    <a-marker
+      type="barcode"
+      value="11"
+      smooth="true"
+      smooth-count="5"
+      smooth-tolerance="0.01"
+      smooth-threshold="2"
+      marcador-elemento="id: na">
+    </a-marker>
+
+    <a-marker
+      type="barcode"
+      value="17"
+      smooth="true"
+      smooth-count="5"
+      smooth-tolerance="0.01"
+      smooth-threshold="2"
+      marcador-elemento="id: cl">
+    </a-marker>
+
+    <a-entity camera>
+      <a-entity
+        id="viewer"
+        visible="false"
+        position="0 0 -2.5"
+        scale="0.72 0.72 0.72">
+
+        <a-entity
+          id="atomo-na"
+          laboratorio-atomico>
+        </a-entity>
+
+        <a-text
+          id="titulo-central"
+          value="Na"
+          align="center"
+          color="#ffffff"
+          width="3.3"
+          position="0 1.28 0">
+        </a-text>
+
+        <a-text
+          id="label-na"
+          value="Sódio (Na)"
+          visible="false"
+          align="center"
+          color="#ffffff"
+          width="2.7">
+        </a-text>
+
+        <a-text
+          id="label-cl"
+          value="Cloro (Cl)"
+          visible="false"
+          align="center"
+          color="#ffffff"
+          width="2.7">
+        </a-text>
+
+      </a-entity>
+    </a-entity>
+  </a-scene>
+
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+</head>
+
+<body style="margin:0; overflow:hidden; background:#000;">
+
+  <div id="status"
+       style="
+         position:fixed;
+         top:12px;
+         left:50%;
+         transform:translateX(-50%);
+         z-index:20;
+         background:rgba(0,0,0,.78);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:10px;
+         padding:9px 14px;
+         font:700 14px Arial,sans-serif;
+         text-align:center;">
+    V2 Laboratório — aponte para o barcode 11 (Sódio)
+  </div>
+
+  <button id="btn-modo-camadas"
+       style="
+         display:none;
+         position:fixed;
+         right:12px;
+         bottom:22px;
+         z-index:30;
+         background:rgba(0,0,0,.88);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:12px;
+         padding:12px 14px;
+         font:700 14px Arial,sans-serif;
+         box-shadow:0 3px 10px rgba(0,0,0,.35);">
+    ▣ Ver camadas planas
+  </button>
+
+  <div id="legenda"
+       style="
+         display:none;
+         position:fixed;
+         left:12px;
+         bottom:12px;
+         z-index:20;
+         background:rgba(0,0,0,.82);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:10px;
+         padding:10px 12px;
+         font:700 13px Arial,sans-serif;
+         line-height:1.55;">
+      <div style="font-size:15px; margin-bottom:4px;">Sódio — Na — Z = 11</div>
+      <div><span style="color:#ff5a5a;">●</span> Próton: 11</div>
+      <div><span style="color:#55aaff;">●</span> Nêutron: 12</div>
+      <div><span style="color:#ffe066;">●</span> Elétron: 11</div>
+      <div style="font-weight:400; margin-top:5px;">Camadas: 2–8–1</div>
+      <div id="texto-modo" style="font-weight:400;">Visualização: 3D em movimento</div>
+      <div style="font-weight:400;">Modelo didático de Bohr.</div>
+  </div>
+
+  <script src="elementos.js"></script>
+
+  <script>
+    // Rotação controlada por código.
+    // Isso permite parar e alinhar as camadas instantaneamente.
+    
+    // Anel construído diretamente com THREE.TorusGeometry.
+    // Assim controlamos de verdade a quantidade de segmentos e evitamos
+    // o aspecto poligonal da geometria padrão do A-Frame antigo.
+    AFRAME.registerComponent("anel-suave", {
+      schema: {
+        raio: {type: "number", default: 1},
+        tubo: {type: "number", default: 0.008}
+      },
+
+      init: function () {
+        var geometria = new THREE.TorusGeometry(
+          this.data.raio,
+          this.data.tubo,
+          24,   // resolução da espessura do tubo
+          192   // resolução da circunferência
+        );
+
+        var material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.62,
+          roughness: 0.32,
+          metalness: 0.04
+        });
+
+        var malha = new THREE.Mesh(geometria, material);
+        this.el.setObject3D("mesh", malha);
+      },
+
+      remove: function () {
+        var mesh = this.el.getObject3D("mesh");
+        if (mesh) {
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) mesh.material.dispose();
+        }
+        this.el.removeObject3D("mesh");
+      }
+    });
+
+    AFRAME.registerComponent("rotacao-camada", {
+      schema: {
+        velocidade: {type: "number", default: 30},
+        ativo: {type: "boolean", default: true}
+      },
+
+      tick: function (time, delta) {
+        if (!this.data.ativo || !delta) return;
+
+        var rad = THREE.Math.degToRad(
+          this.data.velocidade * (delta / 1000)
+        );
+
+        this.el.object3D.rotation.z += rad;
+      }
+    });
+
+    AFRAME.registerComponent("laboratorio-atomico", {
+      init: function () {
+        var dados = window.ELEMENTOS[0];
+        var atom = this.el;
+
+        // Guardamos as referências para o botão alternar 3D/plano.
+        window.CAMADAS_V2 = [];
+
+        function esfera(parent, radius, color, x, y, z) {
+          var e = document.createElement("a-sphere");
+          e.setAttribute("radius", radius);
+          e.setAttribute("color", color);
+          e.setAttribute("position", x + " " + y + " " + z);
+          e.setAttribute("segments-width", "20");
+          e.setAttribute("segments-height", "16");
+          parent.appendChild(e);
+          return e;
+        }
+
+        // =====================================================
+        // NÚCLEO — sempre parado
+        // =====================================================
+        var nucleo = document.createElement("a-entity");
+        nucleo.setAttribute("id", "nucleo");
+        atom.appendChild(nucleo);
+
+        var total = dados.protons + dados.neutrons;
+        var raioCluster = 0.24;
+        var raioNucleon = 0.078;
+        var golden = Math.PI * (3 - Math.sqrt(5));
+
+        for (var i = 0; i < total; i++) {
+          var y = 1 - (i / Math.max(1, total - 1)) * 2;
+          var r = Math.sqrt(Math.max(0, 1 - y*y));
+          var theta = golden * i;
+
+          var x = Math.cos(theta) * r * raioCluster;
+          var yy = y * raioCluster;
+          var z = Math.sin(theta) * r * raioCluster;
+
+          var cor = i < dados.protons ? "#ff5a5a" : "#55aaff";
+          esfera(nucleo, raioNucleon, cor, x, yy, z);
+        }
+
+        // =====================================================
+        // CAMADAS
+        // =====================================================
+        var raios = [0.48, 0.76, 1.05];
+
+        var inclinacoes = [
+          {x:15, y:0,  z:8},
+          {x:68, y:10, z:28},
+          {x:38, y:58, z:-18}
+        ];
+
+        // graus por segundo. Sinal negativo = sentido contrário.
+        var velocidades = [55, -39, 29];
+
+        dados.camadas.forEach(function(qtd, camadaIndex) {
+
+          // tilt = plano 3D da camada
+          var tilt = document.createElement("a-entity");
+          tilt.setAttribute(
+            "rotation",
+            inclinacoes[camadaIndex].x + " " +
+            inclinacoes[camadaIndex].y + " " +
+            inclinacoes[camadaIndex].z
+          );
+          atom.appendChild(tilt);
+
+          // rotor = rotação dentro do plano
+          var rotor = document.createElement("a-entity");
+          rotor.setAttribute(
+            "rotacao-camada",
+            "velocidade: " + velocidades[camadaIndex] + "; ativo: true"
+          );
+          tilt.appendChild(rotor);
+
+          var ring = document.createElement("a-entity");
+          ring.setAttribute(
+            "anel-suave",
+            "raio: " + raios[camadaIndex] + "; tubo: 0.008"
+          );
+          rotor.appendChild(ring);
+
+          for (var j = 0; j < qtd; j++) {
+            var a = (Math.PI * 2 * j / qtd) + camadaIndex * 0.37;
+            var ex = Math.cos(a) * raios[camadaIndex];
+            var ey = Math.sin(a) * raios[camadaIndex];
+
+            var eletron = esfera(rotor, 0.058, "#ffe066", ex, ey, 0);
+            eletron.setAttribute(
+              "material",
+              "color: #ffe066; emissive: #8a7300; emissiveIntensity: 0.28; roughness: 0.25"
+            );
+          }
+
+          window.CAMADAS_V2.push({
+            tilt: tilt,
+            rotor: rotor,
+            inclinacao: inclinacoes[camadaIndex],
+            velocidade: velocidades[camadaIndex]
+          });
+        });
+
+        // =====================================================
+        // BOTÃO 3D <-> PLANO
+        // =====================================================
+        var btn = document.querySelector("#btn-modo-camadas");
+        var textoModo = document.querySelector("#texto-modo");
+        var modoPlano = false;
+
+        function aplicarModoPlano() {
+          window.CAMADAS_V2.forEach(function(camada) {
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " + camada.velocidade + "; ativo: false"
+            );
+
+            // Zera a rotação em movimento.
+            camada.rotor.object3D.rotation.set(0, 0, 0);
+
+            // Coloca TODAS as camadas no mesmo plano frontal.
+            camada.tilt.object3D.rotation.set(0, 0, 0);
+          });
+
+          btn.textContent = "◉ Voltar ao modo 3D";
+          textoModo.textContent = "Visualização: camadas planas e paradas";
+        }
+
+        function aplicarModo3D() {
+          window.CAMADAS_V2.forEach(function(camada) {
+            var inc = camada.inclinacao;
+
+            camada.tilt.object3D.rotation.set(
+              THREE.Math.degToRad(inc.x),
+              THREE.Math.degToRad(inc.y),
+              THREE.Math.degToRad(inc.z)
+            );
+
+            camada.rotor.object3D.rotation.set(0, 0, 0);
+
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " + camada.velocidade + "; ativo: true"
+            );
+          });
+
+          btn.textContent = "▣ Ver camadas planas";
+          textoModo.textContent = "Visualização: 3D em movimento";
+        }
+
+        btn.addEventListener("click", function () {
+          modoPlano = !modoPlano;
+
+          if (modoPlano) {
+            aplicarModoPlano();
+          } else {
+            aplicarModo3D();
+          }
+        });
+      }
+    });
+
+    AFRAME.registerComponent("controle-marcador-na", {
+      init: function () {
+        var marker = this.el;
+        var viewer = document.querySelector("#viewer");
+        var status = document.querySelector("#status");
+        var legenda = document.querySelector("#legenda");
+        var btn = document.querySelector("#btn-modo-camadas");
+
+        marker.addEventListener("markerFound", function () {
+          viewer.setAttribute("visible", true);
+          legenda.style.display = "block";
+          btn.style.display = "block";
+          status.textContent = "Sódio identificado — modo 3D ativo";
+        });
+
+        marker.addEventListener("markerLost", function () {
+          status.textContent = "Sódio mantido na tela — use o botão 3D / plano";
+        });
+      }
+    });
+  </script>
+
+  <a-scene
+    vr-mode-ui="enabled:false;"
+    loading-screen="enabled:false;"
+    renderer="logarithmicDepthBuffer:true;"
+    arjs="trackingMethod:best; sourceType:webcam; detectionMode:mono_and_matrix; matrixCodeType:4x4_BCH_13_9_3; debugUIEnabled:false;"
+    embedded>
+
+    <a-marker
+      type="barcode"
+      value="11"
+      smooth="true"
+      smooth-count="5"
+      smooth-tolerance="0.01"
+      smooth-threshold="2"
+      controle-marcador-na>
+    </a-marker>
+
+    <a-entity camera>
+      <a-entity
+        id="viewer"
+        visible="false"
+        position="0 0 -2.5"
+        scale="0.72 0.72 0.72">
+
+        <a-entity laboratorio-atomico></a-entity>
+
+        <a-text
+          value="SODIO | Na | Z=11"
+          align="center"
+          color="#ffffff"
+          width="4.5"
+          position="0 1.35 0">
+        </a-text>
+
+      </a-entity>
+    </a-entity>
+  </a-scene>
+
+</body>
+</html>

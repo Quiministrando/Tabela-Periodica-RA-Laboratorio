@@ -1,0 +1,553 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+</head>
+
+<body style="margin:0; overflow:hidden; background:#000;">
+
+  <!-- Avisos breves. Não permanece cobrindo o átomo. -->
+  <div id="toast"
+       style="
+         display:none;
+         position:fixed;
+         top:14px;
+         left:50%;
+         transform:translateX(-50%);
+         z-index:40;
+         max-width:82vw;
+         background:rgba(0,0,0,.84);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:10px;
+         padding:8px 12px;
+         font:700 14px Arial,sans-serif;
+         text-align:center;
+         box-shadow:0 3px 10px rgba(0,0,0,.35);">
+  </div>
+
+  <!-- Informações do isótopo: aparecem somente quando solicitadas. -->
+  <div id="painel-info"
+       style="
+         display:none;
+         position:fixed;
+         left:50%;
+         top:50%;
+         transform:translate(-50%,-50%);
+         z-index:60;
+         width:min(330px,calc(100vw - 34px));
+         box-sizing:border-box;
+         background:rgba(0,0,0,.93);
+         color:#fff;
+         border:2px solid #fff;
+         border-radius:14px;
+         padding:16px;
+         font-family:Arial,sans-serif;
+         box-shadow:0 6px 22px rgba(0,0,0,.55);">
+
+      <button id="btn-fechar-info"
+              style="
+                position:absolute;
+                right:9px;
+                top:7px;
+                border:0;
+                background:transparent;
+                color:#fff;
+                font:700 25px Arial,sans-serif;">
+        ×
+      </button>
+
+      <div style="font-size:12px;font-weight:700;opacity:.72;">ISÓTOPO ATUAL</div>
+
+      <div id="info-nome"
+           style="font-size:23px;font-weight:700;margin-top:3px;">
+        Sódio-23
+      </div>
+
+      <div id="info-simbolo"
+           style="font-size:30px;font-weight:700;margin:2px 0 10px 0;">
+        ²³Na
+      </div>
+
+      <div style="font-size:15px;line-height:1.55;">
+        Prótons: <strong id="info-protons">11</strong><br>
+        Nêutrons: <strong id="info-neutrons">12</strong><br>
+        Número de massa: <strong id="info-massa">23</strong><br>
+        Estado: <strong id="info-estabilidade">Estável</strong><br>
+        Meia-vida: <strong id="info-meia-vida">Estável</strong>
+      </div>
+
+      <div id="info-observacao"
+           style="font-size:13px;line-height:1.4;opacity:.8;margin-top:10px;">
+      </div>
+  </div>
+
+  <!-- Controles compactos na faixa inferior. -->
+  <div id="barra-controles"
+       style="
+         display:none;
+         position:fixed;
+         left:50%;
+         bottom:18px;
+         transform:translateX(-50%);
+         z-index:35;
+         align-items:center;
+         gap:7px;
+         white-space:nowrap;">
+
+      <button id="btn-menos-neutron"
+              title="Remover um nêutron"
+              style="
+                min-width:48px;
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 11px;
+                font:700 18px Arial,sans-serif;">
+        −n
+      </button>
+
+      <button id="btn-info"
+              title="Ver informações do isótopo"
+              style="
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 12px;
+                font:700 14px Arial,sans-serif;">
+        ℹ Isótopo
+      </button>
+
+      <button id="btn-mais-neutron"
+              title="Adicionar um nêutron"
+              style="
+                min-width:48px;
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 11px;
+                font:700 18px Arial,sans-serif;">
+        +n
+      </button>
+
+      <button id="btn-modo-camadas"
+              title="Alternar visualização 3D/plana"
+              style="
+                background:rgba(0,0,0,.86);
+                color:#fff;
+                border:2px solid #fff;
+                border-radius:12px;
+                padding:10px 12px;
+                font:700 14px Arial,sans-serif;">
+        ▣ Plano
+      </button>
+  </div>
+
+  <script src="elementos.js"></script>
+
+  <script>
+    var TOAST_TIMER = null;
+
+    function mostrarToast(texto, duracao) {
+      var toast = document.querySelector("#toast");
+      toast.textContent = texto;
+      toast.style.display = "block";
+
+      if (TOAST_TIMER) {
+        clearTimeout(TOAST_TIMER);
+      }
+
+      TOAST_TIMER = setTimeout(function () {
+        toast.style.display = "none";
+      }, duracao || 1700);
+    }
+
+    AFRAME.registerComponent("anel-suave", {
+      schema: {
+        raio: {type: "number", default: 1},
+        tubo: {type: "number", default: 0.008}
+      },
+
+      init: function () {
+        var geometria = new THREE.TorusGeometry(
+          this.data.raio,
+          this.data.tubo,
+          24,
+          192
+        );
+
+        var material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.62,
+          roughness: 0.32,
+          metalness: 0.04
+        });
+
+        var malha = new THREE.Mesh(geometria, material);
+        this.el.setObject3D("mesh", malha);
+      },
+
+      remove: function () {
+        var mesh = this.el.getObject3D("mesh");
+        if (mesh) {
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) mesh.material.dispose();
+        }
+        this.el.removeObject3D("mesh");
+      }
+    });
+
+    AFRAME.registerComponent("rotacao-camada", {
+      schema: {
+        velocidade: {type: "number", default: 30},
+        ativo: {type: "boolean", default: true}
+      },
+
+      tick: function (time, delta) {
+        if (!this.data.ativo || !delta) return;
+
+        var rad = THREE.Math.degToRad(
+          this.data.velocidade * (delta / 1000)
+        );
+
+        this.el.object3D.rotation.z += rad;
+      }
+    });
+
+    AFRAME.registerComponent("laboratorio-atomico", {
+      init: function () {
+        this.dados = window.ELEMENTOS[0];
+        this.atom = this.el;
+        this.isotopoIndex = 1; // Na-23
+        this.nucleo = null;
+
+        window.CAMADAS_V2 = [];
+
+        this.criarNucleo();
+        this.criarCamadas();
+        this.configurarControles();
+        this.atualizarDadosUI();
+      },
+
+      esfera: function (parent, radius, color, x, y, z) {
+        var e = document.createElement("a-sphere");
+        e.setAttribute("radius", radius);
+        e.setAttribute("color", color);
+        e.setAttribute("position", x + " " + y + " " + z);
+        e.setAttribute("segments-width", "20");
+        e.setAttribute("segments-height", "16");
+        parent.appendChild(e);
+        return e;
+      },
+
+      criarNucleo: function () {
+        if (this.nucleo && this.nucleo.parentNode) {
+          this.nucleo.parentNode.removeChild(this.nucleo);
+        }
+
+        var isotopo = this.dados.isotopos[this.isotopoIndex];
+
+        var nucleo = document.createElement("a-entity");
+        nucleo.setAttribute("id", "nucleo");
+        this.atom.appendChild(nucleo);
+        this.nucleo = nucleo;
+
+        var protons = this.dados.protons;
+        var neutrons = isotopo.neutrons;
+        var total = protons + neutrons;
+
+        var raioCluster = 0.205;
+        var raioNucleon = 0.078;
+        var golden = Math.PI * (3 - Math.sqrt(5));
+
+        var nucleons = [];
+        var pRest = protons;
+        var nRest = neutrons;
+
+        while (pRest > 0 || nRest > 0) {
+          if (pRest > 0) {
+            nucleons.push("proton");
+            pRest--;
+          }
+
+          if (nRest > 0) {
+            nucleons.push("neutron");
+            nRest--;
+          }
+        }
+
+        for (var i = 0; i < total; i++) {
+          var y = 1 - (i / Math.max(1, total - 1)) * 2;
+          var r = Math.sqrt(Math.max(0, 1 - y*y));
+          var theta = golden * i;
+
+          var camadaInterna = [0.68, 0.82, 0.96][i % 3];
+          var espalhamento = raioCluster * camadaInterna;
+
+          var x = Math.cos(theta) * r * espalhamento;
+          var yy = y * espalhamento;
+          var z = Math.sin(theta) * r * espalhamento;
+
+          var tipo = nucleons[i];
+          var cor = (tipo === "proton") ? "#55aaff" : "#ffe066";
+
+          this.esfera(nucleo, raioNucleon, cor, x, yy, z);
+        }
+      },
+
+      criarCamadas: function () {
+        var self = this;
+
+        var raios = [0.48, 0.76, 1.05];
+        var inclinacoes = [
+          {x:15, y:0,  z:8},
+          {x:68, y:10, z:28},
+          {x:38, y:58, z:-18}
+        ];
+
+        var velocidades = [55, -39, 29];
+
+        this.dados.camadas.forEach(function(qtd, camadaIndex) {
+          var tilt = document.createElement("a-entity");
+
+          tilt.setAttribute(
+            "rotation",
+            inclinacoes[camadaIndex].x + " " +
+            inclinacoes[camadaIndex].y + " " +
+            inclinacoes[camadaIndex].z
+          );
+
+          self.atom.appendChild(tilt);
+
+          var rotor = document.createElement("a-entity");
+
+          rotor.setAttribute(
+            "rotacao-camada",
+            "velocidade: " + velocidades[camadaIndex] + "; ativo: true"
+          );
+
+          tilt.appendChild(rotor);
+
+          var ring = document.createElement("a-entity");
+          ring.setAttribute(
+            "anel-suave",
+            "raio: " + raios[camadaIndex] + "; tubo: 0.008"
+          );
+          rotor.appendChild(ring);
+
+          for (var j = 0; j < qtd; j++) {
+            var a = (Math.PI * 2 * j / qtd) + camadaIndex * 0.37;
+            var ex = Math.cos(a) * raios[camadaIndex];
+            var ey = Math.sin(a) * raios[camadaIndex];
+
+            var eletron = self.esfera(
+              rotor,
+              0.058,
+              "#ff5a5a",
+              ex,
+              ey,
+              0
+            );
+
+            eletron.setAttribute(
+              "material",
+              "color: #ff5a5a; emissive: #7c1717; emissiveIntensity: 0.24; roughness: 0.25"
+            );
+          }
+
+          window.CAMADAS_V2.push({
+            tilt: tilt,
+            rotor: rotor,
+            inclinacao: inclinacoes[camadaIndex],
+            velocidade: velocidades[camadaIndex]
+          });
+        });
+      },
+
+      atualizarDadosUI: function () {
+        var iso = this.dados.isotopos[this.isotopoIndex];
+
+        document.querySelector("#info-nome").textContent = iso.nome;
+        document.querySelector("#info-simbolo").textContent = iso.simboloNuclear;
+        document.querySelector("#info-protons").textContent = this.dados.protons;
+        document.querySelector("#info-neutrons").textContent = iso.neutrons;
+        document.querySelector("#info-massa").textContent = iso.massa;
+        document.querySelector("#info-estabilidade").textContent = iso.estabilidade;
+        document.querySelector("#info-meia-vida").textContent = iso.meiaVida;
+        document.querySelector("#info-observacao").textContent = iso.observacao || "";
+
+        var btnMenos = document.querySelector("#btn-menos-neutron");
+        var btnMais = document.querySelector("#btn-mais-neutron");
+
+        btnMenos.disabled = (this.isotopoIndex === 0);
+        btnMais.disabled = (this.isotopoIndex === this.dados.isotopos.length - 1);
+
+        btnMenos.style.opacity = btnMenos.disabled ? "0.35" : "1";
+        btnMais.style.opacity = btnMais.disabled ? "0.35" : "1";
+      },
+
+      mudarIsotopo: function (passo) {
+        var novo = this.isotopoIndex + passo;
+
+        if (novo < 0 || novo >= this.dados.isotopos.length) {
+          return;
+        }
+
+        this.isotopoIndex = novo;
+        this.criarNucleo();
+        this.atualizarDadosUI();
+
+        var iso = this.dados.isotopos[this.isotopoIndex];
+
+        // Apenas uma notificação curta.
+        mostrarToast(
+          iso.nome + " • " + iso.estabilidade,
+          1450
+        );
+      },
+
+      configurarControles: function () {
+        var self = this;
+
+        document.querySelector("#btn-menos-neutron")
+          .addEventListener("click", function () {
+            self.mudarIsotopo(-1);
+          });
+
+        document.querySelector("#btn-mais-neutron")
+          .addEventListener("click", function () {
+            self.mudarIsotopo(1);
+          });
+
+        var painel = document.querySelector("#painel-info");
+
+        document.querySelector("#btn-info")
+          .addEventListener("click", function () {
+            self.atualizarDadosUI();
+            painel.style.display = "block";
+          });
+
+        document.querySelector("#btn-fechar-info")
+          .addEventListener("click", function () {
+            painel.style.display = "none";
+          });
+
+        var btn = document.querySelector("#btn-modo-camadas");
+        var modoPlano = false;
+
+        function aplicarModoPlano() {
+          window.CAMADAS_V2.forEach(function(camada) {
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " + camada.velocidade + "; ativo: false"
+            );
+
+            camada.rotor.object3D.rotation.set(0, 0, 0);
+            camada.tilt.object3D.rotation.set(0, 0, 0);
+          });
+
+          btn.textContent = "◉ 3D";
+          mostrarToast("Camadas planas", 1100);
+        }
+
+        function aplicarModo3D() {
+          window.CAMADAS_V2.forEach(function(camada) {
+            var inc = camada.inclinacao;
+
+            camada.tilt.object3D.rotation.set(
+              THREE.Math.degToRad(inc.x),
+              THREE.Math.degToRad(inc.y),
+              THREE.Math.degToRad(inc.z)
+            );
+
+            camada.rotor.object3D.rotation.set(0, 0, 0);
+
+            camada.rotor.setAttribute(
+              "rotacao-camada",
+              "velocidade: " + camada.velocidade + "; ativo: true"
+            );
+          });
+
+          btn.textContent = "▣ Plano";
+          mostrarToast("Modo 3D", 1100);
+        }
+
+        btn.addEventListener("click", function () {
+          modoPlano = !modoPlano;
+
+          if (modoPlano) {
+            aplicarModoPlano();
+          } else {
+            aplicarModo3D();
+          }
+        });
+      }
+    });
+
+    AFRAME.registerComponent("controle-marcador-na", {
+      init: function () {
+        var marker = this.el;
+        var viewer = document.querySelector("#viewer");
+        var barra = document.querySelector("#barra-controles");
+
+        marker.addEventListener("markerFound", function () {
+          viewer.setAttribute("visible", true);
+          barra.style.display = "flex";
+          mostrarToast("Sódio identificado", 1300);
+        });
+
+        marker.addEventListener("markerLost", function () {
+          // Sem mensagem permanente. O átomo segue como protagonista.
+        });
+      }
+    });
+  </script>
+
+  <a-scene
+    vr-mode-ui="enabled:false;"
+    loading-screen="enabled:false;"
+    renderer="logarithmicDepthBuffer:true;"
+    arjs="trackingMethod:best; sourceType:webcam; detectionMode:mono_and_matrix; matrixCodeType:4x4_BCH_13_9_3; debugUIEnabled:false;"
+    embedded>
+
+    <a-marker
+      type="barcode"
+      value="11"
+      smooth="true"
+      smooth-count="5"
+      smooth-tolerance="0.01"
+      smooth-threshold="2"
+      controle-marcador-na>
+    </a-marker>
+
+    <a-entity camera>
+      <a-entity
+        id="viewer"
+        visible="false"
+        position="0 0 -2.5"
+        scale="0.72 0.72 0.72">
+
+        <a-entity id="atomo-na" laboratorio-atomico></a-entity>
+
+        <!-- Nome discreto. Não ocupa painel de interface. -->
+        <a-text
+          value="Na"
+          align="center"
+          color="#ffffff"
+          width="3.3"
+          position="0 1.28 0">
+        </a-text>
+
+      </a-entity>
+    </a-entity>
+  </a-scene>
+
+</body>
+</html>

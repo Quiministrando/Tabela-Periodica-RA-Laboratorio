@@ -1,0 +1,662 @@
+<!doctype html>
+<!-- SISTEMA OFICIAL: barcodes Z=1–118; C (Z=6) usa ID técnico 206 -->
+<!-- VERSAO OTIMIZADA: carrega apenas 1 GLB por vez; camera AR.js preservada -->
+<html>
+<head>
+<script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+<script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-detector.js"></script>
+<script src="elementos.js"></script>
+
+<script>
+AFRAME.registerComponent("persistent-gesture-handler", {
+    schema: {
+        enabled:{default:true},
+        rotationFactor:{default:5},
+        minScale:{default:0.3},
+        maxScale:{default:8}
+    },
+
+    init:function(){
+        this.handleRotation=this.handleRotation.bind(this);
+        this.handleScale=this.handleScale.bind(this);
+        this.initialScale=this.el.object3D.scale.clone();
+        this.scaleFactor=1;
+
+        this.el.sceneEl.addEventListener("onefingermove",this.handleRotation);
+        this.el.sceneEl.addEventListener("twofingermove",this.handleScale);
+    },
+
+    remove:function(){
+        this.el.sceneEl.removeEventListener("onefingermove",this.handleRotation);
+        this.el.sceneEl.removeEventListener("twofingermove",this.handleScale);
+    },
+
+    handleRotation:function(event){
+        if(!this.data.enabled)return;
+
+        this.el.object3D.rotation.y +=
+            event.detail.positionChange.x*this.data.rotationFactor;
+
+        this.el.object3D.rotation.x +=
+            event.detail.positionChange.y*this.data.rotationFactor;
+    },
+
+    handleScale:function(event){
+        if(!this.data.enabled || !event.detail.startSpread)return;
+
+        this.scaleFactor *=
+            1 + event.detail.spreadChange/event.detail.startSpread;
+
+        this.scaleFactor = Math.min(
+            Math.max(this.scaleFactor,this.data.minScale),
+            this.data.maxScale
+        );
+
+        this.el.object3D.scale.set(
+            this.initialScale.x*this.scaleFactor,
+            this.initialScale.y*this.scaleFactor,
+            this.initialScale.z*this.scaleFactor
+        );
+    },
+
+    resetViewer:function(){
+        this.scaleFactor=1;
+        this.el.object3D.scale.copy(this.initialScale);
+        this.el.object3D.rotation.set(0,0,0);
+        this.el.object3D.position.set(0,0,-2.5);
+    }
+});
+</script>
+</head>
+
+<body style="margin:0;overflow:hidden;">
+
+<button id="botao-explorar" type="button"
+style="display:none;position:fixed;right:14px;bottom:18px;z-index:10000;background:rgba(0,0,0,.88);color:white;border:2px solid white;border-radius:14px;padding:12px 16px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">
+☰ Explorar
+</button>
+
+<button id="botao-recentrar" type="button"
+style="display:none;position:fixed;left:14px;bottom:18px;z-index:10000;background:rgba(0,0,0,.78);color:white;border:1px solid white;border-radius:12px;padding:10px 13px;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
+⌖ Recentrar
+</button>
+
+<div id="aviso-selecao"
+style="display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:15000;background:rgba(0,0,0,.82);color:white;border:1px solid white;border-radius:10px;padding:7px 11px;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;white-space:nowrap;">
+</div>
+
+<div id="menu-elemento"
+style="display:none;position:fixed;left:10px;right:10px;bottom:10px;z-index:10001;background:rgba(0,0,0,.93);color:white;border:2px solid white;border-radius:14px;padding:14px;font-family:Arial,sans-serif;font-size:15px;line-height:1.4;text-align:left;max-height:72%;overflow-y:auto;">
+
+<!-- TELA PRINCIPAL -->
+<div id="tela-principal">
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+<div id="nome-elemento" style="font-size:23px;font-weight:bold;"></div>
+<button id="botao-fechar" type="button"
+style="background:white;color:black;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;font-weight:bold;">×</button>
+</div>
+
+<div style="border-top:1px solid rgba(255,255,255,.55);padding-top:10px;">
+<div id="linha-1"></div>
+<div id="linha-2" style="margin-top:3px;"></div>
+<div id="linha-3" style="margin-top:8px;"></div>
+<div id="linha-4" style="margin-top:3px;"></div>
+<div id="linha-5" style="margin-top:8px;"></div>
+</div>
+
+<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.55);">
+
+<button id="botao-audio" type="button"
+style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid white;background:white;color:black;font-size:15px;font-weight:bold;">
+🔊 Ouvir descrição
+</button>
+
+<button id="botao-curiosidades" type="button"
+style="width:100%;margin-bottom:8px;padding:11px;border-radius:10px;border:1px solid white;background:white;color:black;font-size:15px;font-weight:bold;">
+💡 Curiosidades
+</button>
+
+<button id="botao-ficha" type="button"
+style="width:100%;padding:11px;border-radius:10px;border:1px solid white;background:white;color:black;font-size:15px;font-weight:bold;">
+📋 Ficha completa
+</button>
+
+</div>
+</div>
+
+<!-- TELA CURIOSIDADES -->
+<div id="tela-curiosidades" style="display:none;">
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+<div id="titulo-curiosidades" style="font-size:22px;font-weight:bold;">💡 Curiosidades</div>
+
+<button id="fechar-curiosidades" type="button"
+style="background:white;color:black;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;font-weight:bold;">×</button>
+</div>
+
+<div id="lista-curiosidades"
+style="border-top:1px solid rgba(255,255,255,.55);padding-top:10px;">
+</div>
+
+<div id="bloco-pergunta"
+style="display:none;margin-top:14px;padding:12px;border:1px solid white;border-radius:10px;background:rgba(255,255,255,.10);">
+<div style="font-weight:bold;margin-bottom:5px;">🔎 Observe e responda</div>
+<div id="pergunta-observacao"></div>
+</div>
+
+<button id="voltar-curiosidades" type="button"
+style="width:100%;margin-top:14px;padding:11px;border-radius:10px;border:1px solid white;background:white;color:black;font-size:15px;font-weight:bold;">
+← Voltar
+</button>
+
+</div>
+
+<!-- TELA FICHA COMPLETA -->
+<div id="tela-ficha" style="display:none;">
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+<div id="titulo-ficha" style="font-size:22px;font-weight:bold;">📋 Ficha completa</div>
+
+<button id="fechar-ficha" type="button"
+style="background:white;color:black;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;font-weight:bold;">×</button>
+</div>
+
+<div id="conteudo-ficha"
+style="border-top:1px solid rgba(255,255,255,.55);padding-top:10px;">
+</div>
+
+<button id="voltar-ficha" type="button"
+style="width:100%;margin-top:14px;padding:11px;border-radius:10px;border:1px solid white;background:white;color:black;font-size:15px;font-weight:bold;">
+← Voltar
+</button>
+
+</div>
+
+</div>
+
+<a-scene
+vr-mode-ui="enabled: false;"
+loading-screen="enabled: false;"
+renderer="logarithmicDepthBuffer: true;"
+arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 4x4_BCH_13_9_3;"
+id="scene"
+embedded
+gesture-detector>
+
+<a-assets id="assets-dinamicos"></a-assets>
+
+<a-entity id="camera-ra" camera>
+<a-entity
+id="viewer"
+position="0 0 -2.5"
+scale="0.5607348115010105 0.5607348115010105 0.5607348115010105"
+rotation="0 0 0"
+visible="false"
+persistent-gesture-handler>
+</a-entity>
+</a-entity>
+
+</a-scene>
+
+<script>
+(function(){
+
+var scene=document.getElementById("scene");
+var viewer=document.getElementById("viewer");
+
+var botaoExplorar=document.getElementById("botao-explorar");
+var botaoRecentrar=document.getElementById("botao-recentrar");
+var botaoFechar=document.getElementById("botao-fechar");
+var botaoAudio=document.getElementById("botao-audio");
+var botaoCuriosidades=document.getElementById("botao-curiosidades");
+var botaoFicha=document.getElementById("botao-ficha");
+
+var menu=document.getElementById("menu-elemento");
+var telaPrincipal=document.getElementById("tela-principal");
+var telaCuriosidades=document.getElementById("tela-curiosidades");
+var telaFicha=document.getElementById("tela-ficha");
+
+var fecharCuriosidades=document.getElementById("fechar-curiosidades");
+var voltarCuriosidades=document.getElementById("voltar-curiosidades");
+var fecharFicha=document.getElementById("fechar-ficha");
+var voltarFicha=document.getElementById("voltar-ficha");
+
+var listaCuriosidades=document.getElementById("lista-curiosidades");
+var tituloCuriosidades=document.getElementById("titulo-curiosidades");
+var blocoPergunta=document.getElementById("bloco-pergunta");
+var perguntaObservacao=document.getElementById("pergunta-observacao");
+
+var tituloFicha=document.getElementById("titulo-ficha");
+var conteudoFicha=document.getElementById("conteudo-ficha");
+
+var avisoSelecao=document.getElementById("aviso-selecao");
+
+var nome=document.getElementById("nome-elemento");
+var linha1=document.getElementById("linha-1");
+var linha2=document.getElementById("linha-2");
+var linha3=document.getElementById("linha-3");
+var linha4=document.getElementById("linha-4");
+var linha5=document.getElementById("linha-5");
+
+var elementoAtual=null;
+var modeloAtivo=null;
+var tokenModelo=0;
+var timerAviso=null;
+
+var audioPlayer=new Audio();
+audioPlayer.preload="none";
+
+function definirBotao(botao, disponivel, ativo, inativo){
+    botao.disabled=!disponivel;
+    botao.textContent=disponivel?ativo:inativo;
+
+    if(disponivel){
+        botao.style.background="white";
+        botao.style.color="black";
+    }else{
+        botao.style.background="rgba(255,255,255,.12)";
+        botao.style.color="rgba(255,255,255,.70)";
+    }
+}
+
+function preencherDados(e){
+
+    elementoAtual=e;
+
+    nome.innerHTML=e.nome+" — "+e.simbolo;
+
+    linha1.innerHTML=
+        "<strong>Número atômico:</strong> "+e.numeroAtomico+
+        " &nbsp;•&nbsp; <strong>Grupo:</strong> "+e.grupo+
+        " &nbsp;•&nbsp; <strong>Período:</strong> "+e.periodo;
+
+    linha2.innerHTML=
+        "<strong>"+e.familia+"</strong>"+
+        " &nbsp;•&nbsp; <strong>Estado:</strong> "+e.estado;
+
+    linha3.innerHTML=
+        "<strong>Distribuição eletrônica:</strong> "+e.distribuicao;
+
+    linha4.innerHTML=
+        "<strong>Configuração:</strong> "+e.configuracao;
+
+    linha5.innerHTML=
+        "<strong>"+e.valencia+"</strong>"+
+        " &nbsp;•&nbsp; <strong>Íon mais comum:</strong> "+e.ion;
+
+    botaoExplorar.innerHTML="☰ Explorar "+e.simbolo;
+
+    definirBotao(
+        botaoCuriosidades,
+        !!(e.curiosidades&&e.curiosidades.length),
+        "💡 Curiosidades",
+        "💡 Curiosidades — em breve"
+    );
+
+    definirBotao(
+        botaoFicha,
+        !!e.ficha,
+        "📋 Ficha completa",
+        "📋 Ficha completa — em breve"
+    );
+}
+
+function mostrarAviso(e){
+    avisoSelecao.textContent="✓ "+e.nome+" ("+e.simbolo+") selecionado";
+    avisoSelecao.style.display="block";
+
+    if(timerAviso)clearTimeout(timerAviso);
+
+    timerAviso=setTimeout(function(){
+        avisoSelecao.style.display="none";
+    },1300);
+}
+
+function resetViewer(){
+    var comp=viewer.components["persistent-gesture-handler"];
+    if(comp&&comp.resetViewer)comp.resetViewer();
+}
+
+function removerModeloAtivo(){
+    if(modeloAtivo && modeloAtivo.parentNode===viewer){
+        viewer.removeChild(modeloAtivo);
+    }
+    modeloAtivo=null;
+}
+
+function carregarModeloElemento(e){
+
+    if(modeloAtivo && modeloAtivo.dataset.elemento===e.id){
+        viewer.setAttribute("visible","true");
+        modeloAtivo.setAttribute("visible","true");
+        resetViewer();
+        return;
+    }
+
+    tokenModelo++;
+    var meuToken=tokenModelo;
+
+    removerModeloAtivo();
+    viewer.setAttribute("visible","false");
+
+    var modelo=document.createElement("a-entity");
+    modelo.setAttribute("id","modelo-ativo");
+    modelo.setAttribute("visible","false");
+    modelo.setAttribute("gltf-model",e.modelo);
+    modelo.dataset.elemento=e.id;
+
+    modelo.addEventListener("model-loaded",function(){
+
+        if(meuToken!==tokenModelo)return;
+        if(!elementoAtual || elementoAtual.id!==e.id)return;
+
+        modelo.setAttribute("visible","true");
+        viewer.setAttribute("visible","true");
+        resetViewer();
+    });
+
+    modelo.addEventListener("model-error",function(){
+        if(meuToken!==tokenModelo)return;
+        console.error("Erro ao carregar modelo:",e.modelo);
+        viewer.setAttribute("visible","false");
+    });
+
+    viewer.appendChild(modelo);
+    modeloAtivo=modelo;
+}
+
+function selecionarElemento(e){
+
+    if(!audioPlayer.paused)audioPlayer.pause();
+
+    audioPlayer.currentTime=0;
+    audioPlayer.removeAttribute("src");
+    audioPlayer.removeAttribute("data-elemento");
+    audioPlayer.load();
+
+    botaoAudio.textContent="🔊 Ouvir descrição";
+
+    preencherDados(e);
+
+    /*
+      Carrega somente o GLB do elemento reconhecido.
+      Evita manter dezenas de modelos 3D na memória do celular.
+    */
+    carregarModeloElemento(e);
+
+    telaPrincipal.style.display="block";
+    telaCuriosidades.style.display="none";
+    telaFicha.style.display="none";
+    menu.style.display="none";
+
+    botaoExplorar.style.display="block";
+    botaoRecentrar.style.display="block";
+
+    mostrarAviso(e);
+}
+
+/* ÁUDIO */
+botaoAudio.addEventListener("click",function(){
+
+    if(!elementoAtual||!elementoAtual.audio)return;
+
+    if(!audioPlayer.paused&&!audioPlayer.ended){
+        audioPlayer.pause();
+        botaoAudio.textContent="▶ Continuar descrição";
+        return;
+    }
+
+    if(!audioPlayer.src||audioPlayer.dataset.elemento!==elementoAtual.id){
+        audioPlayer.src=elementoAtual.audio;
+        audioPlayer.dataset.elemento=elementoAtual.id;
+        audioPlayer.load();
+    }
+
+    audioPlayer.play().then(function(){
+        botaoAudio.textContent="⏸ Pausar descrição";
+    }).catch(function(){
+        botaoAudio.textContent="🔇 Áudio ainda não disponível";
+    });
+});
+
+audioPlayer.addEventListener("ended",function(){
+    botaoAudio.textContent="🔊 Ouvir descrição";
+});
+
+audioPlayer.addEventListener("error",function(){
+    botaoAudio.textContent="🔇 Áudio ainda não disponível";
+});
+
+/* CURIOSIDADES */
+botaoCuriosidades.addEventListener("click",function(){
+
+    if(!elementoAtual||!elementoAtual.curiosidades)return;
+
+    listaCuriosidades.innerHTML="";
+    tituloCuriosidades.textContent=
+        "💡 Curiosidades sobre "+elementoAtual.nome;
+
+    elementoAtual.curiosidades.forEach(function(item){
+
+        var bloco=document.createElement("div");
+
+        bloco.style.marginBottom="12px";
+        bloco.style.paddingBottom="10px";
+        bloco.style.borderBottom=
+            "1px solid rgba(255,255,255,.25)";
+
+        bloco.innerHTML=
+            '<div style="font-weight:bold;font-size:16px;margin-bottom:3px;">'+
+            item.icone+" "+item.titulo+
+            '</div><div>'+item.texto+'</div>';
+
+        listaCuriosidades.appendChild(bloco);
+    });
+
+    if(elementoAtual.perguntaObservacao){
+        perguntaObservacao.textContent=
+            elementoAtual.perguntaObservacao;
+        blocoPergunta.style.display="block";
+    }else{
+        blocoPergunta.style.display="none";
+    }
+
+    telaPrincipal.style.display="none";
+    telaCuriosidades.style.display="block";
+});
+
+voltarCuriosidades.addEventListener("click",function(){
+    telaCuriosidades.style.display="none";
+    telaPrincipal.style.display="block";
+});
+
+fecharCuriosidades.addEventListener("click",function(){
+    telaCuriosidades.style.display="none";
+    telaPrincipal.style.display="block";
+    menu.style.display="none";
+
+    botaoExplorar.style.display="block";
+    botaoRecentrar.style.display="block";
+});
+
+/* FICHA COMPLETA */
+botaoFicha.addEventListener("click",function(){
+
+    if(!elementoAtual||!elementoAtual.ficha)return;
+
+    var f=elementoAtual.ficha;
+
+    tituloFicha.textContent=
+        "📋 Ficha completa — "+elementoAtual.nome;
+
+    conteudoFicha.innerHTML=
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Número atômico (Z)</strong><br>'+elementoAtual.numeroAtomico+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Número de massa (A)</strong><br>'+f.numeroMassa+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Prótons</strong><br>'+f.protons+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Elétrons</strong><br>'+f.eletrons+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Nêutrons</strong><br>'+f.neutrons+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Massa atômica</strong><br>'+f.massaAtomica+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Grupo</strong><br>'+f.grupo+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Período</strong><br>'+f.periodo+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Camadas ocupadas</strong><br>'+f.camadas+
+        '</div>'+
+
+        '<div style="padding:9px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Bloco</strong><br>'+f.bloco+
+        '</div>'+
+
+        '</div>'+
+
+        '<div style="margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Distribuição por camadas</strong><br>'+f.distribuicaoCamadas+
+        '</div>'+
+
+        '<div style="margin-top:8px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Configuração eletrônica completa</strong><br>'+f.configuracaoCompleta+
+        '</div>'+
+
+        '<div style="margin-top:8px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Configuração eletrônica condensada</strong><br>'+f.configuracaoCondensada+
+        '</div>'+
+
+        '<div style="margin-top:8px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Elétrons de valência</strong><br>'+f.eletronsValencia+
+        '</div>'+
+
+        '<div style="margin-top:8px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Classificação</strong><br>'+f.classificacao+
+        ' • '+f.estado+
+        '</div>'+
+
+        '<div style="margin-top:8px;padding:10px;border:1px solid rgba(255,255,255,.35);border-radius:8px;">'+
+        '<strong>Íon mais comum</strong><br>'+f.ionComum+
+        '</div>'+
+
+        '<div style="margin-top:12px;padding:10px;border-radius:8px;background:rgba(255,255,255,.10);font-size:13px;">'+
+        '<strong>ℹ️ Sobre massa e número de massa</strong><br>'+
+        f.observacaoMassa+
+        '</div>';
+
+    telaPrincipal.style.display="none";
+    telaFicha.style.display="block";
+});
+
+voltarFicha.addEventListener("click",function(){
+    telaFicha.style.display="none";
+    telaPrincipal.style.display="block";
+});
+
+fecharFicha.addEventListener("click",function(){
+    telaFicha.style.display="none";
+    telaPrincipal.style.display="block";
+    menu.style.display="none";
+
+    botaoExplorar.style.display="block";
+    botaoRecentrar.style.display="block";
+});
+
+/* MENU */
+botaoExplorar.addEventListener("click",function(){
+
+    if(!elementoAtual)return;
+
+    botaoExplorar.style.display="none";
+    botaoRecentrar.style.display="none";
+
+    telaPrincipal.style.display="block";
+    telaCuriosidades.style.display="none";
+    telaFicha.style.display="none";
+
+    menu.style.display="block";
+});
+
+botaoFechar.addEventListener("click",function(){
+
+    menu.style.display="none";
+
+    if(elementoAtual){
+        botaoExplorar.style.display="block";
+        botaoRecentrar.style.display="block";
+    }
+});
+
+botaoRecentrar.addEventListener("click",function(){
+    if(elementoAtual)resetViewer();
+});
+
+/* MARCADORES
+   Os modelos GLB não são mais pré-carregados.
+   Só os marcadores são registrados no início.
+*/
+/*
+   SISTEMA OFICIAL DE BARCODE/MATRIX MARKERS.
+   Todos os elementos cadastrados entre Z=1 e Z=118 podem ficar
+   ativos simultaneamente.
+
+   Regra geral: valor do barcode = número atômico.
+   Exceção técnica já validada: Carbono (Z=6) usa barcode 206.
+   Não há arquivos .patt nesta arquitetura.
+*/
+window.ELEMENTOS
+.filter(function(e){
+    var z=Number(e.numeroAtomico);
+    return z>=1 && z<=118;
+})
+.forEach(function(e){
+
+    var marker=document.createElement("a-marker");
+    /*
+       O número atômico continua sendo o identificador químico.
+       Exceção técnica: Carbono (Z=6) usa o barcode 206 porque
+       o marcador de valor 6 apresentou falha de reconhecimento
+       no teste real do celular.
+    */
+    var barcodeId = Number(e.numeroAtomico)===6 ? 206 : Number(e.numeroAtomico);
+
+    marker.setAttribute("id","barcode-"+e.numeroAtomico);
+    marker.setAttribute("type","barcode");
+    marker.setAttribute("value",String(barcodeId));
+    marker.setAttribute("emitevents","true");
+
+    scene.appendChild(marker);
+
+    marker.addEventListener("markerFound",function(){
+        selecionarElemento(e);
+    });
+});
+
+})();
+</script>
+
+</body>
+</html>
